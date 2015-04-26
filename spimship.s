@@ -43,7 +43,7 @@ SPIMBOT_LEXICON_REQUEST 	= 0xffff1008
 
 # I/O used in competitive scenario 
 INTERFERENCE_MASK 	= 0x8000 
-INTERFERENCE_ACK 	= 0xffff1304 #8 
+INTERFERENCE_ACK 	= 0xffff1304
 SPACESHIP_FIELD_CNT  	= 0xffff110c 
 .text
 
