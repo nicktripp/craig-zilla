@@ -45,11 +45,9 @@ SPIMBOT_LEXICON_REQUEST 	= 0xffff1008
 INTERFERENCE_MASK 	= 0x8000 
 INTERFERENCE_ACK 	= 0xffff1304 #8 
 SPACESHIP_FIELD_CNT  	= 0xffff110c 
-
 .text
 
-main:
-	
+main:	
 	jr	$ra
 
 .kdata
