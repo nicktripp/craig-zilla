@@ -1,4 +1,4 @@
-.data
+.data 
 
 # movement memory-mapped I/O
 VELOCITY            = 0xffff0010
@@ -30,17 +30,17 @@ PRINT_INT           = 0xffff0080
 SCAN_MASK           = 0x2000
 SCAN_ACKNOWLEDGE    = 0xffff1204
 ENERGY_MASK         = 0x4000
-ENERGY_ACKNOWLEDGE  = 0xffff1208  
+ENERGY_ACKNOWLEDGE  = 0xffff1208
 
-# puzzle interface locations 
-SPIMBOT_PUZZLE_REQUEST 		= 0xffff1000 
-SPIMBOT_SOLVE_REQUEST 		= 0xffff1004 
-SPIMBOT_LEXICON_REQUEST 	= 0xffff1008 
+# puzzle interface locations
+SPIMBOT_PUZZLE_REQUEST 		= 0xffff1000
+SPIMBOT_SOLVE_REQUEST 		= 0xffff1004
+SPIMBOT_LEXICON_REQUEST 	= 0xffff1008
 
-# I/O used in competitive scenario 
-INTERFERENCE_MASK 	= 0x8000 
-INTERFERENCE_ACK 	= 0xffff1304 8 
-SPACESHIP_FIELD_CNT  	= 0xffff110c 
+# I/O used in competitive scenario
+INTERFERENCE_MASK 	= 0x8000
+INTERFERENCE_ACK 	= 0xffff1304 8
+SPACESHIP_FIELD_CNT  	= 0xffff110c
 
 .text
 
