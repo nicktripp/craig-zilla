@@ -1,0 +1,4 @@
+Implement other trig functions (arcsin, arccos)?
+Puzzle solving interface
+
+Strategies
