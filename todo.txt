@@ -1,4 +1,56 @@
 Implement other trig functions (arcsin, arccos)?
 Puzzle solving interface
+- Update horiz_strcmp and vertical_strcmp to use our puzzle and with right return value
+- Add back_horiz_strcmp and back_vertical_strcmp
+- modify find words to include back strncmps
 
 Strategies
+- Implement Drag and Drop strategy
+  > Figure out target location
+  >
+- Implement Perturbation strategy
+- Implement offensive strategies
+- Implement king-of-the-hill strategies (aka trolling)
+
+Implement decision system
+- Many different numerical factors affect strategy choice
+- Every strategy has weights for all factors
+- Add all the weighted factors to get the strategy with the highest score and follow that
+
+Nick
+----
+- Puzzle solving
+
+Arko
+----
+- Strategy framework
+- Decision machine design and framework
+
+while(true)
+{
+   int strategy = getStrategy()
+
+   switch(strategy)
+   {
+      case DRAG_DROP: drag_drop_step(); break;
+      case PERTURBATION: perturbation_step(); break;
+   }
+}
+
+drag_drop_step()
+{
+   int currentState = getState();
+   
+   switch(currentState)
+   {
+      case PLANET_TO_DUST: 
+        // check if you've reached
+        // if you've reached, then setState(DUST_TO_PLANET) and change velocity, turn on field
+        // if not, update trajectory
+        break;
+      case DUST_TO_PLANET:
+        // check if you've reached
+        // if you've reached, turn off field, change velocity, setState(PLANET_TO_DUST)
+        // if 
+   }
+}

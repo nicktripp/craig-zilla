@@ -1,8 +1,11 @@
 .data
 .align 2
+LEXICON:	.space 4096
+PUZZLE:         .space 4104 # at least??
 PLANETS:        .space 64
 DUST:           .space 256
 SCAN_COMPL:     .space 1
+
 
 # movement memory-mapped I/O
 VELOCITY            = 0xffff0010
@@ -48,7 +51,18 @@ SPACESHIP_FIELD_CNT  	= 0xffff110c
 .text
 
 main:	
-	jr	$ra
+        la      $t0, LEXICON
+	sw      $t0, SPIMBOT_LEXICON_REQUEST
+
+        la      $t0, PUZZLE
+        sw      $t0, SPIMBOT_PUZZLE_REQUEST
+
+        la      $t0, PLANETS
+
+infinite:
+        sw      $t0, PLANETS_REQUEST
+	j	infinite
+
 
 .kdata
 chunkIH:        .space 8
@@ -60,28 +74,28 @@ interrupt_handler:
 .set at
         # save a0 and v0
         la      $k0, chunkIH
-        sw	$a0, 0($k0)
-	sw	$v0, 4($k0)
+        sw      $a0, 0($k0)
+        sw      $v0, 4($k0)
         # k0 can be recycled
 
-	mfc0    $k0, $13		# Get cause register
-	srl     $a0, $k0, 2		#
-	and     $a0, $a0, 0xf		# ExcCode field
-	bne     $a0, 0, finished        # if not an interrupt then exit the handler
+        mfc0    $k0, $13		# Get cause register
+        srl     $a0, $k0, 2		#
+        and     $a0, $a0, 0xf		# ExcCode field
+        bne     $a0, 0, finished        # if not an interrupt then exit the handler
 
 interrupt_dispatch:
         mfc0    $k0, $13		# get cause register again
-	beq     $k0, 0, finished
+        beq     $k0, 0, finished
 
         # send interrupts to their sub handlers
         and     $a0, $k0, SCAN_MASK	# handle scan interrupt
-	bne     $a0, 0, scan_interrupt
+        bne     $a0, 0, scan_interrupt
 
         and     $a0, $k0, ENERGY_MASK	# handle energy interrupt
         bne     $a0, 0, energy_interrupt
 
-	and	$a0, $k0, INTERFERENCE_MASK
-	bne	$a0, 0, interference_interrupt
+        and     $a0, $k0, INTERFERENCE_MASK
+        bne     $a0, 0, interference_interrupt
 
         # other interrupts
 
@@ -176,3 +190,21 @@ pos_x:
 	add	$v0, $v0, $t0	# angle += delta
 
 	jr 	$ra
+
+# -----------------------------------------------------------------------
+# euclidean_dist - computes sqrt(x^2 + y^2)
+# $a0 - x
+# $a1 - y
+# returns the distance
+# -----------------------------------------------------------------------
+
+euclidean_dist:
+	mul	$a0, $a0, $a0	# x^2
+	mul	$a1, $a1, $a1	# y^2
+	add	$v0, $a0, $a1	# x^2 + y^2
+	mtc1	$v0, $f0
+	cvt.s.w	$f0, $f0	# float(x^2 + y^2)
+	sqrt.s	$f0, $f0	# sqrt(x^2 + y^2)
+	cvt.w.s	$f0, $f0	# int(sqrt(...))
+	mfc1	$v0, $f0
+	jr	$ra
