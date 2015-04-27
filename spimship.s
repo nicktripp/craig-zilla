@@ -50,19 +50,28 @@ INTERFERENCE_ACK 	= 0xffff1304
 SPACESHIP_FIELD_CNT  	= 0xffff110c 
 .text
 
-main:	
+main:
+        li      $t0, SCAN_MASK                  # enable scan interrupt
+        or      $t0, $t0, ENERGY_MASK           # enable energy interrupt
+        or      $t0, $t0, INTERFERENCE_MASK     # enable interference interrupt
+        or      $t0, $t0, 1                     # enable interrupt handling
+        mtc0    $t0, $12
+        
         la      $t0, LEXICON
 	sw      $t0, SPIMBOT_LEXICON_REQUEST
 
         la      $t0, PUZZLE
         sw      $t0, SPIMBOT_PUZZLE_REQUEST
 
-        la      $t0, PLANETS
-
 infinite:
-        sw      $t0, PLANETS_REQUEST
+        jal     update_planet_data              # keep updating planet positions
 	j	infinite
 
+# t0 modified
+update_planet_data:
+        la      $t0, PLANETS
+        sw      $t0, PLANETS_REQUEST
+        jr      $ra
 
 .kdata
 chunkIH:        .space 8
