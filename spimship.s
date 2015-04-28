@@ -37,17 +37,17 @@ PRINT_INT           = 0xffff0080
 SCAN_MASK           = 0x2000
 SCAN_ACKNOWLEDGE    = 0xffff1204
 ENERGY_MASK         = 0x4000
-ENERGY_ACKNOWLEDGE  = 0xffff1208  
+ENERGY_ACKNOWLEDGE  = 0xffff1208
 
-# puzzle interface locations 
-SPIMBOT_PUZZLE_REQUEST 		= 0xffff1000 
-SPIMBOT_SOLVE_REQUEST 		= 0xffff1004 
-SPIMBOT_LEXICON_REQUEST 	= 0xffff1008 
+# puzzle interface locations
+SPIMBOT_PUZZLE_REQUEST 		= 0xffff1000
+SPIMBOT_SOLVE_REQUEST 		= 0xffff1004
+SPIMBOT_LEXICON_REQUEST 	= 0xffff1008
 
-# I/O used in competitive scenario 
-INTERFERENCE_MASK 	= 0x8000 
+# I/O used in competitive scenario
+INTERFERENCE_MASK 	= 0x8000
 INTERFERENCE_ACK 	= 0xffff1304
-SPACESHIP_FIELD_CNT  	= 0xffff110c 
+SPACESHIP_FIELD_CNT  	= 0xffff110c
 .text
 
 main:
@@ -56,12 +56,11 @@ main:
         or      $t0, $t0, INTERFERENCE_MASK     # enable interference interrupt
         or      $t0, $t0, 1                     # enable interrupt handling
         mtc0    $t0, $12
-        
+
         la      $t0, LEXICON
 	sw      $t0, SPIMBOT_LEXICON_REQUEST
 
-        la      $t0, PUZZLE
-        sw      $t0, SPIMBOT_PUZZLE_REQUEST
+
 
 infinite:
         jal     update_planet_data              # keep updating planet positions
@@ -72,6 +71,14 @@ update_planet_data:
         la      $t0, PLANETS
         sw      $t0, PLANETS_REQUEST
         jr      $ra
+
+
+solve_puzzle:
+        la      $t0, PUZZLE
+        sw      $t0, SPIMBOT_PUZZLE_REQUEST
+        
+
+
 
 .kdata
 chunkIH:        .space 8
@@ -141,7 +148,7 @@ three:	.float	3.0
 five:	.float	5.0
 PI:	.float	3.141592
 F180:	.float  180.0
-	
+
 .text
 
 # -----------------------------------------------------------------------
@@ -156,18 +163,18 @@ sb_arctan:
 
 	abs	$t0, $a0	# get absolute values
 	abs	$t1, $a1
-	ble	$t1, $t0, no_TURN_90	  
+	ble	$t1, $t0, no_TURN_90
 
 	## if (abs(y) > abs(x)) { rotate 90 degrees }
 	move	$t0, $a1	# int temp = y;
-	neg	$a1, $a0	# y = -x;      
-	move	$a0, $t0	# x = temp;    
-	li	$v0, 90		# angle = 90;  
+	neg	$a1, $a0	# y = -x;
+	move	$a0, $t0	# x = temp;
+	li	$v0, 90		# angle = 90;
 
 no_TURN_90:
 	bgez	$a0, pos_x 	# skip if (x >= 0)
 
-	## if (x < 0) 
+	## if (x < 0)
 	add	$v0, $v0, 180	# angle += 180;
 
 pos_x:
@@ -175,7 +182,7 @@ pos_x:
 	mtc1	$a1, $f1
 	cvt.s.w $f0, $f0	# convert from ints to floats
 	cvt.s.w $f1, $f1
-	
+
 	div.s	$f0, $f1, $f0	# float v = (float) y / (float) x;
 
 	mul.s	$f1, $f0, $f0	# v^^2
