@@ -1,0 +1,56 @@
+
+
+blah blah TimerInterruptHandler
+{
+    desiredStrategy = evaluateConditionsForStrategy();
+    nextTimerInterupt = now() + TIMER_STEP;
+}
+
+
+blah blah EnergyInterruptHandler
+{
+    desiredStrategy = evaluateConditionsForStrategy();
+}
+
+
+
+main()
+{
+    while(true)
+    {
+        int strategy = desiredStrategy;
+        switch(strategy)
+        {
+            case DRAG_DROP: drag_drop(); break;
+            case ...
+        }
+    }
+}
+
+drag_drop()
+{
+    go_get_dust();
+
+    // CHECK for the desiredStratgy
+    // If desiredStrategy != drag_drop
+    //      return;
+    return_to_planet();
+}
+
+go_get_dust()
+{
+//LOOP:
+    // CHECK for the desiredStratgy
+    // If desiredStrategy != drag_drop || done
+    //      return;
+    //
+    // update direction;
+
+}
+
+return_to_planet()
+{
+//LOOP:
+    // update direction;
+    // return_to_planet();
+}
