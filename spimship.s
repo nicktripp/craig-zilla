@@ -66,8 +66,8 @@ infinite:
         jal     update_planet_data              # keep updating planet positions
 	j	infinite
 
-# t0 modified
-update_planet_data:
+
+update_planet_data: # t0 modified
         la      $t0, PLANETS
         sw      $t0, PLANETS_REQUEST
         jr      $ra
@@ -140,7 +140,7 @@ finished:
 .set noat
         move    $at, $k1
 .set at
-    eret
+        eret
 
 # euclidean.s
 .data
