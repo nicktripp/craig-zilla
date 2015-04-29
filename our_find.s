@@ -278,13 +278,13 @@ bvs_return:
 ##                 }
 ##
 ##                 word_end = back_horiz_strncmp(word, start, i*num_columns);
-##                 if (word_end > 0)
+##                 if (word_end >= 0)
 ##                 {
 ##                     record_word(word, start, word_end);
 ##                 }
 ##
 ##                 word_end = back_vert_strncmp(word, i, j);
-##                 if (word_end > 0)
+##                 if (word_end >= 0)
 ##                 {
 ##                     record_word(word, start, word_end);
 ##                 }
@@ -332,6 +332,7 @@ fw_k:
 	add	$t0, $s0, $t0		# &dictionary[k]
 	lw	$s8, 0($t0)		# word = dictionary[k]
 
+fw_horiz:
 	move	$a0, $s8		# word
 	move	$a1, $s5		# start
 	move	$a2, $s6		# end
@@ -347,7 +348,30 @@ fw_vert:
 	move	$a1, $s3		# i
 	move	$a2, $s4		# j
 	jal	vert_strncmp
-	ble	$v0, 0, fw_k_next	# !(word_end > 0)
+	ble	$v0, 0, fw_back_horiz	# !(word_end > 0)
+	move	$a0, $s8		# word
+	move	$a1, $s5		# start
+	move	$a2, $v0		# word_end
+	jal	record_word
+
+fw_back_horiz:
+        move	$a0, $s8		# word
+	move	$a1, $s5		# start
+        sub     $t0, $s5, $s4           # t0 = i*num_columns + j - j
+	move	$a2, $t0		# i*num_columns
+	jal	back_horiz_strncmp
+	blt	$v0, 0, fw_back_vert	# !(word_end >= 0)
+	move	$a0, $s8		# word
+	move	$a1, $s5		# start
+	move	$a2, $v0		# word_end
+	jal	record_word
+
+fw_back_vert:
+	move	$a0, $s8		# word
+	move	$a1, $s3		# i
+	move	$a2, $s4		# j
+	jal	back_vert_strncmp
+	blt	$v0, 0, fw_k_next	# !(word_end >= 0)
 	move	$a0, $s8		# word
 	move	$a1, $s5		# start
 	move	$a2, $v0		# word_end
@@ -380,6 +404,15 @@ fw_done:
 	jr	$ra
 
 
+
+get_character:
+	lw	$t0, num_columns
+	mul	$t0, $a0, $t0		# i * num_columns
+	add	$t0, $t0, $a1		# i * num_columns + j
+	lw	$t1, puzzle
+	add	$t1, $t1, $t0		# &puzzle[i * num_columns + j]
+	lbu	$v0, 0($t1)		# puzzle[i * num_columns + j]
+	jr	$ra
 
 
 ## ??
