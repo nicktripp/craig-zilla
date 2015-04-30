@@ -5,8 +5,8 @@ PUZZLE:         .space 4104 # at least??
 SOLUTION:       .space 804
 PLANETS:        .space 64
 DUST:           .space 256
+STRATEGY:	.space 4
 SCAN_COMPL:     .space 1
-
 
 # movement memory-mapped I/O
 VELOCITY            = 0xffff0010
@@ -49,6 +49,11 @@ SPIMBOT_LEXICON_REQUEST 	= 0xffff1008
 INTERFERENCE_MASK 	= 0x8000
 INTERFERENCE_ACK 	= 0xffff1304
 SPACESHIP_FIELD_CNT  	= 0xffff110c
+
+IDLE		= 0
+DRAG_DROP	= 1
+PERTURBATION	= 2
+
 .text
 
 main:
@@ -58,24 +63,93 @@ main:
         or      $t0, $t0, 1                     # enable interrupt handling
         mtc0    $t0, $12
 
-
-
-
-
 infinite:
         jal     update_planet_data              # keep updating planet positions
+	lw	$t0, STRATEGY
+	beq	$t0, DRAG_DROP, drag_drop
+	beq	$t0, PERTURBATION, perturbation
 	j	infinite
 
+drag_drop:
+	jal	get_max_sector
+	# v0 is now the index of the max sector
+	# do math to get the center of the sector   } scan
+	# s0 = targetX, s1 = targetY
+ get_dust_loop:	
+	lw	$t0, STRATEGY
+	bne	$t0, DRAG_DROP, infinite
+	# a0 = targetX, a1 = targetY
+	jal	at_target
+	beq	$v0, 1, end_get_dust		# if at target end_get_dust
+	#     a0 = targetX, a1 = targetY
+	jal face_target
+	j	get_dust_loop
+ end_get_dust:
+	lw	$t0, STRATEGY
+	bne	$t0, DRAG_DROP, infinite	# if strategy change then leave
+	# switch on field, modify velocity
+ go_planet_loop:
+	# if not at planet continue, else jump to end_go_planet
+	# change dir to planet
+	j	go_planet_loop
+ end_go_planet:
+	# switch off field
+	j	infinite
 
+perturbation:
+ perturbation_loop:
+	lw	$t0, STRATEGY
+	bne	$t0, PERTURBATION, end_perturbation
+	# while strategy is perturbation
+	# 
+	#   if at planet front
+	#     if field off and sufficient dust in curr sector
+	#       switch field on
+	#     else switch field off
+	#   else
+	#     modify dir to planet
+	j	perturbation_loop
+ end_perturbation:
+	j	infinite
+
+strategy_3:
+	# do stuff
+	j	infinite
+
+strategy_4:
+	# do stuff
+	j	infinite
+
+######################
+# helper subroutines #
+######################
 update_planet_data: # t0 modified
         la      $t0, PLANETS
         sw      $t0, PLANETS_REQUEST
         jr      $ra
 
+# returns the index of the sector with the most dust
+get_max_sector:
+	# complete
+	jr	$ra
 
+# a0: targetX, a1: targetY
+# makes spimbot face the target direction
+face_target:
+	# complete
+	jr	$ra
+
+# a0: targetX, a1: targetY
+# returns 1 if it's sufficiently close to target, otherwise 1
+at_target:
+	# complete
+	jr	$ra
+##########################
+# end helper subroutings #
+##########################
 
 ################################################################################
-                                PUZZLE SOLVER
+#                               PUZZLE SOLVER                                  #
 ################################################################################
 
 solve_puzzle:
@@ -525,7 +599,7 @@ get_character:
         lw	$t0, 4($t7)             # v0 = num_columns
 	mul	$t0, $a0, $t0		# i * num_columns
 	add	$t0, $t0, $a1		# i * num_columns + j
-        la      $t1, PUZZLE             # t1 = &puzzle
+        la	$t1, PUZZLE             # t1 = &puzzle
 	add	$t1, $t1, 8             # t1 = &puzzle
 	add	$t1, $t1, $t0		# &puzzle[i * num_columns + j]
 	lbu	$v0, 0($t1)		# puzzle[i * num_columns + j]
@@ -558,7 +632,7 @@ record_word:
 
 
 ################################################################################
-                           PUZZLE SOLVER - END
+#                           PUZZLE SOLVER - END                                #
 ################################################################################
 
 
@@ -612,7 +686,7 @@ energy_interrupt:
         j       interrupt_dispatch      # there may still be interrupts
 
 interference_interrupt:
-	sw	$a1, INTERFERENCE_ACKNOWLEDGE
+        sw	$a1, INTERFERENCE_ACKNOWLEDGE
 	j	interrupt_dispatch
 
 finished:
