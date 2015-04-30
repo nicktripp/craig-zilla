@@ -50,9 +50,15 @@ INTERFERENCE_MASK 	= 0x8000
 INTERFERENCE_ACK 	= 0xffff1304
 SPACESHIP_FIELD_CNT  	= 0xffff110c
 
+# timer
+TIMER_MASK		= 0x8000
+TIMER_ACKNOWLEDGE	= 0xffff006c
+
 IDLE		= 0
 DRAG_DROP	= 1
 PERTURBATION	= 2
+
+AT_DIST		= 5
 
 .text
 
@@ -63,8 +69,13 @@ main:
         or      $t0, $t0, 1                     # enable interrupt handling
         mtc0    $t0, $12
 
+	sw	$zero, VELOCITY			# set velocity to 0
+
+	li	$t0, -1
+	sw	$t0, STRATEGY			# start off doing nothing
+
 infinite:
-        jal     update_planet_data              # keep updating planet positions
+        # jal     update_planet_data              # keep updating planet positions
 	lw	$t0, STRATEGY
 	beq	$t0, DRAG_DROP, drag_drop
 	beq	$t0, PERTURBATION, perturbation
@@ -73,27 +84,31 @@ infinite:
 drag_drop:
 	jal	get_max_sector
 	# v0 is now the index of the max sector
-	# do math to get the center of the sector   } scan
+	# do math to get the center of the sector 
 	# s0 = targetX, s1 = targetY
  get_dust_loop:	
 	lw	$t0, STRATEGY
-	bne	$t0, DRAG_DROP, infinite
+	bne	$t0, DRAG_DROP, infinite	# if strategy change, restart
 	# a0 = targetX, a1 = targetY
 	jal	at_target
 	beq	$v0, 1, end_get_dust		# if at target end_get_dust
 	#     a0 = targetX, a1 = targetY
-	jal face_target
+	jal	face_target
 	j	get_dust_loop
  end_get_dust:
 	lw	$t0, STRATEGY
 	bne	$t0, DRAG_DROP, infinite	# if strategy change then leave
 	# switch on field, modify velocity
  go_planet_loop:
-	# if not at planet continue, else jump to end_go_planet
-	# change dir to planet
+	# a0 = planetX a1 = planetY
+	jal	at_target
+	beq	$v0, 1, end_go_planet		# end loop if reached planet
+	# a0 = planetX a1 = planetY
+	jal	face_target			# change dir to face planet
 	j	go_planet_loop
  end_go_planet:
-	# switch off field
+	sw	$zero, GET_SET_FIELD		# switch field off
+	sw	$zero, VELOCITY			# stop moving
 	j	infinite
 
 perturbation:
@@ -136,16 +151,42 @@ get_max_sector:
 # a0: targetX, a1: targetY
 # makes spimbot face the target direction
 face_target:
-	# complete
+	lw	$t0, BOT_X
+	sub	$a0, $a0, $t0		# a0 = targetX - botX
+	lw	$t0, BOT_Y
+	sub	$a1, $a1, $t0		# a1 = targetY - botY
+
+	move	$s0, $ra
+	jal	sb_arctan
+	move	$ra, $s0
+
+	sw	$v0, ANGLE
+	li	$t0, 1
+	sw	$t0, ANGLE_CONTROL
+
 	jr	$ra
 
 # a0: targetX, a1: targetY
-# returns 1 if it's sufficiently close to target, otherwise 1
+# returns 1 if it's sufficiently close to target, otherwise 0
 at_target:
-	# complete
+	lw	$t0, BOT_X
+	sub	$a0, $a0, $t0		# a0 = targetX - botX
+	lw	$t0, BOT_Y
+	sub	$a1, $a1, $t0		# a1 = targetY - botY
+
+	move	$s0, $ra
+	jal	euclidean_dist
+	move	$ra, $s0
+
+	ble	$v0, AT_DIST, target_near	# if target is close, v0 = 1, else v0 = 0
+	li	$v0, 0
+	j	end_at_target
+ target_near:
+	li	$v0, 1
+ end_at_target:
 	jr	$ra
 ##########################
-# end helper subroutings #
+# end helper subroutines #
 ##########################
 
 ################################################################################
@@ -670,6 +711,9 @@ interrupt_dispatch:
         and     $a0, $k0, INTERFERENCE_MASK
         bne     $a0, 0, interference_interrupt
 
+	and	$a0, $k0, TIMER_MASK
+	bne	$a0, 0, timer_interrupt
+
         # other interrupts
 
         j       finished                # if interrupt isn't handled then exit the handler
@@ -686,7 +730,11 @@ energy_interrupt:
         j       interrupt_dispatch      # there may still be interrupts
 
 interference_interrupt:
-        sw	$a1, INTERFERENCE_ACKNOWLEDGE
+        sw	$a1, INTERFERENCE_ACK
+	j	interrupt_dispatch
+
+timer_interrupt:
+	sw	$a1, TIMER_ACKNOWLEDGE
 	j	interrupt_dispatch
 
 finished:
