@@ -74,19 +74,30 @@ main:
 	li	$t0, -1
 	sw	$t0, STRATEGY			# start off doing nothing
 
+        li	$t0, 10
+	sw	$t0, FIELD_STRENGTH		# start off doing nothing
+
+
 infinite:
         # jal     update_planet_data              # keep updating planet positions
+
+
 	lw	$t0, STRATEGY
 	beq	$t0, DRAG_DROP, drag_drop
 	beq	$t0, PERTURBATION, perturbation
+
+        lw      $t0, ENERGY
+        bnez    $t0, infinite
+        jal     solve_puzzle                  # Request and solve energy puzzle
+
 	j	infinite
 
 drag_drop:
 	jal	get_max_sector
 	# v0 is now the index of the max sector
-	# do math to get the center of the sector 
+	# do math to get the center of the sector
 	# s0 = targetX, s1 = targetY
- get_dust_loop:	
+ get_dust_loop:
 	lw	$t0, STRATEGY
 	bne	$t0, DRAG_DROP, infinite	# if strategy change, restart
 	# a0 = targetX, a1 = targetY
@@ -116,7 +127,7 @@ perturbation:
 	lw	$t0, STRATEGY
 	bne	$t0, PERTURBATION, end_perturbation
 	# while strategy is perturbation
-	# 
+	#
 	#   if at planet front
 	#     if field off and sufficient dust in curr sector
 	#       switch field on
@@ -207,7 +218,7 @@ solve_puzzle:
         li      $t0, 0
         sw      $t0, SOLUTION
 
-        la      $t0, LEXICON                
+        la      $t0, LEXICON
         lw      $a1, LEXICON
         add     $a0, $t0, 4
 
@@ -726,7 +737,6 @@ scan_interrupt:
 #energy interrupt handler
 energy_interrupt:
         sw      $a1, ENERGY_ACKNOWLEDGE
-        # do stuff
         j       interrupt_dispatch      # there may still be interrupts
 
 interference_interrupt:
