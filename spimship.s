@@ -88,12 +88,20 @@ main:
 	li	$t0, IDLE
 	sw	$t0, STRATEGY			# start off doing nothing
 
+        li	$t0, 10
+	sw	$t0, FIELD_STRENGTH		# start off doing nothing
+
 infinite:
 	lw	$t0, STRATEGY				# strategy dispatcher
 	beq	$t0, IDLE, idle
 	beq	$t0, DRAG_DROP, drag_drop
 	beq	$t0, PERTURBATION, perturbation
 	beq	$t0, TROLL, troll
+
+	lw      $t0, ENERGY
+        bnez    $t0, infinite
+        jal     solve_puzzle                    # Request and solve energy puzzle
+
 	j	infinite
 
 idle:
@@ -156,7 +164,7 @@ perturbation:
 	lw	$t0, STRATEGY
 	bne	$t0, PERTURBATION, end_perturbation
 	# while strategy is perturbation
-	# 
+	#
 	#   if at planet front
 	#     if field off and sufficient dust in curr sector
 	#       switch field on
@@ -302,8 +310,9 @@ solve_puzzle:
         li      $t0, 0
         sw      $t0, SOLUTION
 
-        la      $t0, LEXICON                
         lw      $a1, LEXICON
+
+        la      $t0, LEXICON
         add     $a0, $t0, 4
 
         jal     find_words
@@ -579,38 +588,42 @@ back_vert_strncmp:
 ## void
 ## find_words(const char** dictionary, int dictionary_size)
 ## {
-##     for (int i = 0; i < num_rows; i++)
+##     for (int k = 0; k < dictionary_size; k++)
 ##     {
-##         for (int j = 0; j < num_columns; j++)
+##         for (int i = 0; i < num_rows; i++)
 ##         {
-##             int start = i * num_columns + j;
-##             int end = (i + 1) * num_columns - 1;
-##
-##             for (int k = 0; k < dictionary_size; k++)
+##             for (int j = 0; j < num_columns; j++)
 ##             {
+##                 int start = i * num_columns + j;
+##                 int end = (i + 1) * num_columns - 1;
+##
 ##                 const char* word = dictionary[k];
 ##                 int word_end = horiz_strncmp(word, start, end);
 ##                 if (word_end > 0)
 ##                 {
 ##                     record_word(word, start, word_end);
+##		       break;
 ##                 }
 ##
 ##                 word_end = vert_strncmp(word, i, j);
 ##                 if (word_end > 0)
 ##                 {
 ##                     record_word(word, start, word_end);
+##		       break;
 ##                 }
 ##
 ##                 word_end = back_horiz_strncmp(word, start, i*num_columns);
 ##                 if (word_end >= 0)
 ##                 {
 ##                     record_word(word, start, word_end);
+##		       break;
 ##                 }
 ##
 ##                 word_end = back_vert_strncmp(word, i, j);
 ##                 if (word_end >= 0)
 ##                 {
 ##                     record_word(word, start, word_end);
+##		       break;
 ##                 }
 ##
 ##             }
@@ -635,27 +648,31 @@ find_words:
 	move	$s0, $a0		# dictionary
 	move	$s1, $a1		# dictionary_size
         la      $t7, PUZZLE             # t7 = &PUZZLE
-	lw	$s2, 4($t7)             # v0 = num_columns
-	li	$s3, 0			# i = 0
+	lw	$s2, 4($t7)             # s2 = num_columns
 
-  fw_i:
-        lw	$t0, PUZZLE($zero)      # s4 = num_rows
-	bge	$s3, $t0, fw_done	# !(i < num_rows)
-	li	$s4, 0			# j = 0
 
-  fw_j:
-	bge	$s4, $s2, fw_i_next	# !(j < num_columns)
-	mul	$t0, $s3, $s2		# i * num_columns
-	add	$s5, $t0, $s4		# start = i * num_columns + j
-	add	$t0, $t0, $s2		# equivalent to (i + 1) * num_columns
-	sub	$s6, $t0, 1		# end = (i + 1) * num_columns - 1
 	li	$s7, 0			# k = 0
 
   fw_k:
-	bge	$s7, $s1, fw_j_next	# !(k < dictionary_size)
-	mul	$t0, $s7, 4		# k * 4
-	add	$t0, $s0, $t0		# &dictionary[k]
-	lw	$s8, 0($t0)		# word = dictionary[k]
+      	bge	$s7, $s1, fw_done	# !(k < dictionary_size)
+      	mul	$t0, $s7, 4		# k * 4
+      	add	$t0, $s0, $t0		# &dictionary[k]
+      	lw	$s8, 0($t0)		# word = dictionary[k]
+
+      	li	$s3, 0			# i = 0
+
+  fw_i:
+        lw	$t0, PUZZLE($zero)      # t0 = num_rows
+      	bge	$s3, $t0, fw_k_next	# !(i < num_rows)
+      	li	$s4, 0			# j = 0
+
+  fw_j:
+      	bge	$s4, $s2, fw_i_next	# !(j < num_columns)
+      	mul	$t0, $s3, $s2		# i * num_columns
+      	add	$s5, $t0, $s4		# start = i * num_columns + j
+      	add	$t0, $t0, $s2		# equivalent to (i + 1) * num_columns
+      	sub	$s6, $t0, 1		# end = (i + 1) * num_columns - 1
+
 
   fw_horiz:
 	move	$a0, $s8		# word
@@ -667,6 +684,7 @@ find_words:
 	move	$a1, $s5		# start
 	move	$a2, $v0		# word_end
 	jal	record_word
+	j 	fw_k_next
 
   fw_vert:
 	move	$a0, $s8		# word
@@ -678,6 +696,7 @@ find_words:
 	move	$a1, $s5		# start
 	move	$a2, $v0		# word_end
 	jal	record_word
+	j 	fw_k_next
 
   fw_back_horiz:
         move	$a0, $s8		# word
@@ -690,21 +709,18 @@ find_words:
 	move	$a1, $s5		# start
 	move	$a2, $v0		# word_end
 	jal	record_word
+	j 	fw_k_next
 
   fw_back_vert:
 	move	$a0, $s8		# word
 	move	$a1, $s3		# i
 	move	$a2, $s4		# j
 	jal	back_vert_strncmp
-	blt	$v0, 0, fw_k_next	# !(word_end >= 0)
+        blt	$v0, 0, fw_j_next	# !(word_end >= 0)
 	move	$a0, $s8		# word
 	move	$a1, $s5		# start
 	move	$a2, $v0		# word_end
 	jal	record_word
-
-  fw_k_next:
-	add	$s7, $s7, 1		# k++
-	j	fw_k
 
   fw_j_next:
 	add	$s4, $s4, 1		# j++
@@ -713,6 +729,10 @@ find_words:
   fw_i_next:
 	add	$s3, $s3, 1		# i++
 	j	fw_i
+
+  fw_k_next:
+	add	$s7, $s7, 1		# k++
+	j	fw_k
 
   fw_done:
 	lw	$ra, 0($sp)
@@ -727,7 +747,6 @@ find_words:
 	lw	$s8, 36($sp)
 	add	$sp, $sp, 40
 	jr	$ra
-
 
 
 get_character:
@@ -754,11 +773,11 @@ record_word:
         la      $t1, SOLUTION          #
         add     $t1, $t1, 4            # t1 = &positions
 
-        mul     $t2, $t0, 4            # t2 = 4*numWords
+        mul     $t2, $t0, 8            # t2 = 4*numWords*2
         add     $t1, $t1, $t2          # t1 = &positions[numWords]
         sw      $a1, 0($t1)
         sw      $a2, 4($t1)
-        add     $t0, $t0, 2            #  =  +
+        add     $t0, $t0, 1            #  numWords++
 
         sw      $t0, SOLUTION
 
@@ -824,7 +843,6 @@ scan_interrupt:
 
 energy_interrupt:
         sw      $a1, ENERGY_ACKNOWLEDGE
-        # do stuff
         j       interrupt_dispatch      # there may still be interrupts
 
 interference_interrupt:
