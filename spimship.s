@@ -92,16 +92,15 @@ main:
 	sw	$t0, FIELD_STRENGTH		# start off doing nothing
 
 infinite:
+	lw      $t0, ENERGY
+        bnez    $t0, strategy_dispatch
+        jal     solve_puzzle			# solve puzzle
+strategy_dispatch:
 	lw	$t0, STRATEGY				# strategy dispatcher
 	beq	$t0, IDLE, idle
 	beq	$t0, DRAG_DROP, drag_drop
 	beq	$t0, PERTURBATION, perturbation
 	beq	$t0, TROLL, troll
-
-	lw      $t0, ENERGY
-        bnez    $t0, infinite
-        jal     solve_puzzle                    # Request and solve energy puzzle
-
 	j	infinite
 
 idle:
@@ -852,7 +851,7 @@ interference_interrupt:
 timer_interrupt:
 	sw	$a1, TIMER_ACKNOWLEDGE
 	# do strategy calculation
-	li	$a0, IDLE
+	li	$a0, DRAG_DROP
 	sw	$a0, STRATEGY
 	lw	$a0, TIMER
 	add	$a0, $a0, STRAT_INTERVAL
