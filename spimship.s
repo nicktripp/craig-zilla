@@ -72,7 +72,7 @@ DUST_RET_VEL    = 5	# the velocity the bot returns from a dust fetch
 DUST_GET_VEL	= 10	# the velocity at which the bot travels to max dust sector
 DUST_RET_FIELD  = 8	# the field strength of the return trip
 TROLL_FIELD	= 5	# field strength with which we troll
-TROLL_SCORE_ADV	= 200	# how far ahead we must be to troll
+TROLL_SCORE_ADV	= 2000	# how far ahead we must be to troll
 STRAT_INTERVAL	= 1000	# how many cycles to wait till calculating a new strategy
 
 .text
