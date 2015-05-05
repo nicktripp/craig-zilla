@@ -5,6 +5,8 @@ PUZZLE:         .space 4104 # at least??
 SOLUTION:       .space 804
 PLANETS:        .space 64
 DUST:           .space 256
+SCORES:		.space 8
+BOT_FIELD_CNT:	.space 4
 STRATEGY:	.space 4
 SCAN_COMPL:     .space 1
 
@@ -16,6 +18,8 @@ ANGLE_CONTROL       = 0xffff0018
 # coordinates memory-mapped I/O
 BOT_X               = 0xffff0020
 BOT_Y               = 0xffff0024
+OTHER_BOT_X         = 0xffff00a0
+OTHER_BOT_Y         = 0xffff00a4
 
 # planet memory-mapped I/O
 PLANETS_REQUEST     = 0xffff1014
@@ -46,19 +50,30 @@ SPIMBOT_SOLVE_REQUEST 		= 0xffff1004
 SPIMBOT_LEXICON_REQUEST 	= 0xffff1008
 
 # I/O used in competitive scenario
-INTERFERENCE_MASK 	= 0x8000
+INTERFERENCE_MASK 	= 0x400
 INTERFERENCE_ACK 	= 0xffff1304
 SPACESHIP_FIELD_CNT  	= 0xffff110c
 
 # timer
+TIMER			= 0xffff001c
 TIMER_MASK		= 0x8000
 TIMER_ACKNOWLEDGE	= 0xffff006c
 
+# strategies
 IDLE		= 0
 DRAG_DROP	= 1
 PERTURBATION	= 2
+TROLL		= 3
 
+# the distance at which we can safely say the bot has "arrived" at a target
 AT_DIST		= 5
+
+DUST_RET_VEL    = 5	# the velocity the bot returns from a dust fetch
+DUST_GET_VEL	= 10	# the velocity at which the bot travels to max dust sector
+DUST_RET_FIELD  = 8	# the field strength of the return trip
+TROLL_FIELD	= 5	# field strength with which we troll
+TROLL_SCORE_ADV	= 200	# how far ahead we must be to troll
+STRAT_INTERVAL	= 1000	# how many cycles to wait till calculating a new strategy
 
 .text
 
@@ -66,59 +81,92 @@ main:
         li      $t0, SCAN_MASK                  # enable scan interrupt
         or      $t0, $t0, ENERGY_MASK           # enable energy interrupt
         or      $t0, $t0, INTERFERENCE_MASK     # enable interference interrupt
-        or      $t0, $t0, 1                     # enable interrupt handling
+	or	$t0, $t0, TIMER_MASK
+	or      $t0, $t0, 1                     # enable interrupt handling
         mtc0    $t0, $12
-
+	
+	lw	$a0, TIMER
+	add	$a0, $a0, STRAT_INTERVAL
+	sw	$a0, TIMER
 	sw	$zero, VELOCITY			# set velocity to 0
 
-	li	$t0, -1
+	li	$t0, IDLE
 	sw	$t0, STRATEGY			# start off doing nothing
+
+	la	$t0, BOT_FIELD_CNT
+	sw	$t0, SPACESHIP_FIELD_CNT
+
+	la	$t0, SCORES
+	sw	$t0, SCORES_REQUEST
 
         li	$t0, 10
 	sw	$t0, FIELD_STRENGTH		# start off doing nothing
 
-
 infinite:
-        # jal     update_planet_data            # keep updating planet positions
-
-
-	lw	$t0, STRATEGY
+	lw      $t0, ENERGY
+        bnez    $t0, strategy_dispatch
+	li	$zero, VELOCITY
+        jal     solve_puzzle			# solve puzzle
+strategy_dispatch:
+	lw	$t0, STRATEGY				# strategy dispatcher
+	beq	$t0, IDLE, idle
 	beq	$t0, DRAG_DROP, drag_drop
 	beq	$t0, PERTURBATION, perturbation
+	beq	$t0, TROLL, troll
+	j	infinite
 
-        lw      $t0, ENERGY
-        bnez    $t0, infinite
-        jal     solve_puzzle                    # Request and solve energy puzzle
-
+idle:
+	sw	$zero, VELOCITY
+	li	$t0, 1
+	sw	$t0, ANGLE
+	sw	$zero, ANGLE_CONTROL
 	j	infinite
 
 drag_drop:
 	jal	get_max_sector
-	# v0 is now the index of the max sector
-	# do math to get the center of the sector
-	# s0 = targetX, s1 = targetY
- get_dust_loop:
+	and	$s0, $v0, 0x7		# s0 = sector%8 = X
+	mul	$s0, $s0, 300		# s0:X *= 300
+	srl	$s0, $s0, 3		# s0 /= 8
+	add	$s0, $s0, 19		# s0 = xTarget
+	srl	$s1, $v0, 3		# s1 = sector/8 = Y
+	mul	$s1, $s1, 300		# s1:Y *= 300
+	srl	$s1, $s1, 3		# s1 /= 8
+	add	$s1, $s1, 19		# s1 = yTarget
+ get_dust_loop:	
 	lw	$t0, STRATEGY
 	bne	$t0, DRAG_DROP, infinite	# if strategy change, restart
-	# a0 = targetX, a1 = targetY
+	move    $a0, $s0
+	move	$a1, $s1
 	jal	at_target
 	beq	$v0, 1, end_get_dust		# if at target end_get_dust
-	#     a0 = targetX, a1 = targetY
-	jal	face_target
+	move    $a0, $s0
+	move	$a1, $s1
+	jal	face_target			# face target
+	li	$t0, DUST_GET_VEL		# set velocity
+	sw	$t0, VELOCITY
 	j	get_dust_loop
  end_get_dust:
 	lw	$t0, STRATEGY
 	bne	$t0, DRAG_DROP, infinite	# if strategy change then leave
-	# switch on field, modify velocity
+	li	$t0, DUST_RET_FIELD
+	sw	$t0, FIELD_STRENGTH		# switch on field
+	li	$t0, DUST_RET_VEL
+	sw	$t0, VELOCITY			# modify velocity
  go_planet_loop:
-	# a0 = planetX a1 = planetY
+	jal	update_planet_data
+	la	$t0, PLANETS
+	lw	$s0, 0($t0)			# s0 = planetX
+	lw	$s1, 4($t0)			# s1 = planetY
+	move	$a0, $s0
+	move	$a1, $s1
 	jal	at_target
 	beq	$v0, 1, end_go_planet		# end loop if reached planet
-	# a0 = planetX a1 = planetY
+	move	$a0, $s0
+	move	$a1, $s1
 	jal	face_target			# change dir to face planet
 	j	go_planet_loop
  end_go_planet:
-	sw	$zero, GET_SET_FIELD		# switch field off
+	sw	$zero, FIELD_STRENGTH		# switch field off
 	sw	$zero, VELOCITY			# stop moving
 	j	infinite
 
@@ -138,8 +186,21 @@ perturbation:
  end_perturbation:
 	j	infinite
 
-strategy_3:
-	# do stuff
+troll:
+	lw	$a0, OTHER_BOT_X
+	lw	$a1, OTHER_BOT_Y
+	jal	at_target
+	beq	$v0, 1, at_troll_target
+	lw	$t0, FIELD_STRENGTH
+	bgez	$t0, at_troll_target
+	li	$t0, TROLL_FIELD
+	sw	$t0, FIELD_STRENGTH
+ at_troll_target:
+	li	$t0, 10
+	sw	$t0, VELOCITY
+	lw	$a0, OTHER_BOT_X
+	lw	$a1, OTHER_BOT_Y
+	jal	face_target
 	j	infinite
 
 strategy_4:
@@ -156,12 +217,59 @@ update_planet_data: # t0 modified
 
 # returns the index of the sector with the most dust
 get_max_sector:
-	# complete
+	li	$v0, 0			# v0:max  max = 0
+	li	$t0, 0			# t0:i  i = 0
+ max_sector_for:
+	bge	$t0, 64, max_sector_endfor
+
+	li	$t1, 0
+	sw	$t1, SCAN_COMPL		# complete = false;
+	sw	$t0, SCAN_SECTOR	# scan_sector = i;
+	la	$t1, DUST		# 
+	sw	$t1, SCAN_REQUEST	# scan request sent, will take time to complete
+ max_sector_while:
+	lw	$t1, SCAN_COMPL
+	beq	$t1, 1, max_sector_endwhile	# break when complete
+	j	max_sector_while	
+ max_sector_endwhile:
+	la	$t3, DUST		# t3 = dust
+	mul	$t1, $t0, 4		# t1 = 4*i
+	add	$t1, $t1, $t3		# t1 = &dust[i]
+	lw	$t1, 0($t1)		# t1 = dust[i]
+	mul	$t2, $v0, 4		# t2 = 4*max
+	add	$t2, $t2, $t3		# t2 = &dust[max]
+	lw	$t2, 0($t2)		# t2 = dust[max]
+	ble	$t1, $t2, max_sector_endif	# skip if dust[i] <= dust[max]
+	move	$v0, $t0		# max = i
+ max_sector_endif:
+	add	$t0, $t0, 1		# i++
+	j	max_sector_for
+ max_sector_endfor:
 	jr	$ra
+
+scan_sector:
+	la	$t1, DUST
+	li	$t0, 0
+	sw	$t0, SCAN_COMPL			# complete = false;
+	sw	$a0, SCAN_SECTOR	
+	sw	$t1, SCAN_REQUEST
+ scan_sector_while:
+	lw	$t0, SCAN_COMPL
+	beq	$t0, 1, scan_sector_endwhile	# break when complete
+	j	scan_sector_while
+ scan_sector_endwhile:
+	mul	$v0, $a0, 4			# v0 = a0*4
+	add	$v0, $v0, $t1			# v0 = &dust[a0]
+	lw	$v0, 0($v0)			# v0 = dust[a0]
+	jr	$ra
+
 
 # a0: targetX, a1: targetY
 # makes spimbot face the target direction
 face_target:
+	sub	$sp, $sp, 4
+	sw	$s0, 0($sp)
+
 	lw	$t0, BOT_X
 	sub	$a0, $a0, $t0		# a0 = targetX - botX
 	lw	$t0, BOT_Y
@@ -175,11 +283,17 @@ face_target:
 	li	$t0, 1
 	sw	$t0, ANGLE_CONTROL
 
+	lw	$s0, 0($sp)
+	add	$sp, $sp, 4
+
 	jr	$ra
 
 # a0: targetX, a1: targetY
 # returns 1 if it's sufficiently close to target, otherwise 0
 at_target:
+	sub	$sp, $sp, 4
+	sw	$s0, 0($sp)
+
 	lw	$t0, BOT_X
 	sub	$a0, $a0, $t0		# a0 = targetX - botX
 	lw	$t0, BOT_Y
@@ -195,6 +309,8 @@ at_target:
  target_near:
 	li	$v0, 1
  end_at_target:
+	lw	$s0, 0($sp)
+	add	$sp, $sp, 4
 	jr	$ra
 ##########################
 # end helper subroutines #
@@ -699,7 +815,9 @@ record_word:
 ################################################################################
 
 
-
+###########################
+# interrupt handler start #
+###########################
 .kdata
 chunkIH:        .space 8
 
@@ -740,12 +858,13 @@ interrupt_dispatch:
 
         j       finished                # if interrupt isn't handled then exit the handler
 
-#handle scan interrupt
+
 scan_interrupt:
         sw      $a1, SCAN_ACKNOWLEDGE
-        # do stuff
+        li	$a0, 1
+	sw	$a0, SCAN_COMPL		# mark scan as complete
         j       interrupt_dispatch      # there may still be interrupts
-#energy interrupt handler
+
 energy_interrupt:
         sw      $a1, ENERGY_ACKNOWLEDGE
         j       interrupt_dispatch      # there may still be interrupts
@@ -756,6 +875,23 @@ interference_interrupt:
 
 timer_interrupt:
 	sw	$a1, TIMER_ACKNOWLEDGE
+	# do strategy calculation
+	la	$a0, SCORES
+	sw	$a0, SCORES_REQUEST
+	lw	$k0, 4($a0)		# k0 = enemy score
+	lw	$a0, 0($a0)		# a0 = our score
+	sub	$a0, $a0, $k0
+	bgt	$a0, TROLL_SCORE_ADV, choose_troll
+ choose_drag:
+	li	$a0, DRAG_DROP
+	j	end_choose
+ choose_troll:
+	li	$a0, TROLL
+ end_choose:
+	sw	$a0, STRATEGY
+	lw	$a0, TIMER
+	add	$a0, $a0, STRAT_INTERVAL
+	sw	$a0, TIMER
 	j	interrupt_dispatch
 
 finished:
@@ -767,8 +903,13 @@ finished:
         move    $at, $k1
 .set at
         eret
+#########################
+# interrupt handler end #
+#########################
 
-# euclidean.s
+###############
+# euclidean.s #
+###############
 .data
 three:	.float	3.0
 five:	.float	5.0
