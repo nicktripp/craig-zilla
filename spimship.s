@@ -5,6 +5,8 @@ PUZZLE:         .space 4104 # at least??
 SOLUTION:       .space 804
 PLANETS:        .space 64
 DUST:           .space 256
+SCORES:		.space 8
+BOT_FIELD_CNT:	.space 4
 STRATEGY:	.space 4
 SCAN_COMPL:     .space 1
 
@@ -16,6 +18,8 @@ ANGLE_CONTROL       = 0xffff0018
 # coordinates memory-mapped I/O
 BOT_X               = 0xffff0020
 BOT_Y               = 0xffff0024
+OTHER_BOT_X         = 0xffff00a0
+OTHER_BOT_Y         = 0xffff00a4
 
 # planet memory-mapped I/O
 PLANETS_REQUEST     = 0xffff1014
@@ -66,8 +70,9 @@ AT_DIST		= 5
 
 DUST_RET_VEL    = 5	# the velocity the bot returns from a dust fetch
 DUST_GET_VEL	= 10	# the velocity at which the bot travels to max dust sector
-DUST_RET_FIELD  = 5	# the field strength of the return trip
-
+DUST_RET_FIELD  = 8	# the field strength of the return trip
+TROLL_FIELD	= 5	# field strength with which we troll
+TROLL_SCORE_ADV	= 200	# how far ahead we must be to troll
 STRAT_INTERVAL	= 1000	# how many cycles to wait till calculating a new strategy
 
 .text
@@ -88,12 +93,19 @@ main:
 	li	$t0, IDLE
 	sw	$t0, STRATEGY			# start off doing nothing
 
+	la	$t0, BOT_FIELD_CNT
+	sw	$t0, SPACESHIP_FIELD_CNT
+
+	la	$t0, SCORES
+	sw	$t0, SCORES_REQUEST
+
         li	$t0, 10
 	sw	$t0, FIELD_STRENGTH		# start off doing nothing
 
 infinite:
 	lw      $t0, ENERGY
         bnez    $t0, strategy_dispatch
+	li	$zero, VELOCITY
         jal     solve_puzzle			# solve puzzle
 strategy_dispatch:
 	lw	$t0, STRATEGY				# strategy dispatcher
@@ -175,7 +187,20 @@ perturbation:
 	j	infinite
 
 troll:
-	# do stuff
+	lw	$a0, OTHER_BOT_X
+	lw	$a1, OTHER_BOT_Y
+	jal	at_target
+	beq	$v0, 1, at_troll_target
+	lw	$t0, FIELD_STRENGTH
+	bgez	$t0, at_troll_target
+	li	$t0, TROLL_FIELD
+	sw	$t0, FIELD_STRENGTH
+ at_troll_target:
+	li	$t0, 10
+	sw	$t0, VELOCITY
+	lw	$a0, OTHER_BOT_X
+	lw	$a1, OTHER_BOT_Y
+	jal	face_target
 	j	infinite
 
 strategy_4:
@@ -851,7 +876,18 @@ interference_interrupt:
 timer_interrupt:
 	sw	$a1, TIMER_ACKNOWLEDGE
 	# do strategy calculation
+	la	$a0, SCORES
+	sw	$a0, SCORES_REQUEST
+	lw	$k0, 4($a0)		# k0 = enemy score
+	lw	$a0, 0($a0)		# a0 = our score
+	sub	$a0, $a0, $k0
+	bgt	$a0, TROLL_SCORE_ADV, choose_troll
+ choose_drag:
 	li	$a0, DRAG_DROP
+	j	end_choose
+ choose_troll:
+	li	$a0, TROLL
+ end_choose:
 	sw	$a0, STRATEGY
 	lw	$a0, TIMER
 	add	$a0, $a0, STRAT_INTERVAL
